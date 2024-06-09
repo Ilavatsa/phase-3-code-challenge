@@ -1,12 +1,44 @@
-from database.setup import create_tables
-from database.connection import get_db_connection
-from models.article import Article
-from models.author import Author
-from models.magazine import Magazine
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+class Author(Base):
+    __tablename__ = 'authors'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+
+    articles = relationship("Article", back_populates="author")
+
+class Magazine(Base):
+    __tablename__ = 'magazines'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+    category = Column(String)
+
+    articles = relationship("Article", back_populates="magazine")
+
+class Article(Base):
+    __tablename__ = 'articles'
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    content = Column(String)
+    author_id = Column(Integer, ForeignKey('authors.id'))
+    magazine_id = Column(Integer, ForeignKey('magazines.id'))
+
+    author = relationship("Author", back_populates="articles")
+    magazine = relationship("Magazine", back_populates="articles")
 
 def main():
-    # Initialize the database and create tables
-    create_tables()
+    # Connect to the database
+    engine = create_engine('sqlite:///sample.db')
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
     # Collect user input
     author_name = input("Enter author's name: ")
@@ -15,56 +47,30 @@ def main():
     article_title = input("Enter article title: ")
     article_content = input("Enter article content: ")
 
-    # Connect to the database
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # Insert data into the database
+    author = Author(name=author_name)
+    magazine = Magazine(name=magazine_name, category=magazine_category)
+    article = Article(title=article_title, content=article_content, author=author, magazine=magazine)
 
+    session.add(author)
+    session.add(magazine)
+    session.add(article)
+    session.commit()
 
-    '''
-        The following is just for testing purposes, 
-        you can modify it to meet the requirements of your implmentation.
-    '''
-
-    # Create an author
-    cursor.execute('INSERT INTO authors (name) VALUES (?)', (author_name,))
-    author_id = cursor.lastrowid # Use this to fetch the id of the newly created author
-
-    # Create a magazine
-    cursor.execute('INSERT INTO magazines (name, category) VALUES (?,?)', (magazine_name, magazine_category))
-    magazine_id = cursor.lastrowid # Use this to fetch the id of the newly created magazine
-
-    # Create an article
-    cursor.execute('INSERT INTO articles (title, content, author_id, magazine_id) VALUES (?, ?, ?, ?)',
-                   (article_title, article_content, author_id, magazine_id))
-
-    conn.commit()
-
-    # Query the database for inserted records. 
-    # The following fetch functionality should probably be in their respective models
-
-    cursor.execute('SELECT * FROM magazines')
-    magazines = cursor.fetchall()
-
-    cursor.execute('SELECT * FROM authors')
-    authors = cursor.fetchall()
-
-    cursor.execute('SELECT * FROM articles')
-    articles = cursor.fetchall()
-
-    conn.close()
-
-    # Display results
-    print("\nMagazines:")
-    for magazine in magazines:
-        print(Magazine(magazine["id"], magazine["name"], magazine["category"]))
-
+    # Display inserted records
     print("\nAuthors:")
-    for author in authors:
-        print(Author(author["id"], author["name"]))
+    for author in session.query(Author).all():
+        print(author)
+
+    print("\nMagazines:")
+    for magazine in session.query(Magazine).all():
+        print(magazine)
 
     print("\nArticles:")
-    for article in articles:
-        print(Article(article["id"], article["title"], article["content"], article["author_id"], article["magazine_id"]))
+    for article in session.query(Article).all():
+        print(article)
+
+    session.close()
 
 if __name__ == "__main__":
     main()
